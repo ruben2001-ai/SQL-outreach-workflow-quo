@@ -63,9 +63,10 @@ The agent never states a dollar offer, never negotiates. In the Subdivide campai
 Every lead's `parcel_link` (a LandInsight or LandPortal parcel detail URL, depending which platform the batch was sourced from) must be attached to its Quo contact — both for brand-new contacts and for existing ones being reached out to for the first time by this routine:
 
 - **Read `parcel_link` verbatim from the row. Never reconstruct or derive it** — LandPortal links are an opaque encoded query string, not a predictable pattern from the APN like older LandInsight links were. Some campaigns mix both platforms row by row (e.g. the Ellis County Landlocked slice of the Subdivide table uses LandPortal while Kaufman/Van Zandt use LandInsight) — always take whatever string is stored, don't assume a format.
-- **New contact** (`Quo:create-contact`) → include `LandInsight/LandPortal: {parcel_link}` directly in the `notes` field at creation time.
-- **Existing contact** (`contact_quality = "Existing in Quo"`) → before sending, check its notes; if no parcel-link line is present, call `Quo:update-contact` to append it.
-- Never send a first-touch or follow-up message to a contact whose Quo record is missing this link.
+- ⚠️ **The live Quo MCP contact schema has no `notes` field** (`create-contact`/`update-contact` only accept `firstName`, `lastName`, `phoneNumber`, `email`, `company`, `role`) — verified against the actual tool schemas, not assumed. Use the **`company`** field as the parcel-link carrier instead: `APN {apn} | {acreage/lot_acres} ac | {address} | LandPortal: {parcel_link}` (or `LandInsight:` when the row is LandInsight-sourced). It's a free-text field and holds long strings fine (a full LandPortal URL + APN/acreage/address prefix has been confirmed to save and read back intact, no truncation).
+- **New contact** (`Quo:create-contact`) → create with name/phone/email as usual, then immediately `Quo:update-contact` to set `company` to the string above (creation itself has no field for it).
+- **Existing contact** (`contact_quality = "Existing in Quo"`) → before sending, `Quo:get-contact` and check its `company` field; if no parcel-link line is present, call `Quo:update-contact` to set it (don't overwrite an unrelated existing `company` value if one is ever present — append the parcel-link line to it instead).
+- Never send a first-touch or follow-up message to a contact whose Quo record is missing this link. This is a hard gate, always, on every campaign.
 
 ---
 
@@ -534,11 +535,12 @@ a. Send phone: active_phone if set, else first phone_N_type = Mobile, else phone
    fail → outreach_status = "Contact Missing", skip (no count)
 b. Quo:list-contacts by phone:
    - found + prior history in Outreach inbox → outreach_status = "Already Contacted", skip (no count)
-   - found, no history → contact_quality = "Existing in Quo"; if the contact's notes don't already
-     contain a parcel-link line → Quo:update-contact to append it
-   - not found → Quo:create-contact(name, phone, email?,
-     notes = "APN {apn} | {acreage/lot_acres} ac | {address} | LandInsight/LandPortal: {parcel_link}")
+   - found, no history → contact_quality = "Existing in Quo"; Quo:get-contact and check `company`;
+     if it doesn't already contain a parcel-link line → Quo:update-contact to set/append it
+   - not found → Quo:create-contact(name, phone, email?) then Quo:update-contact(company =
+     "APN {apn} | {acreage/lot_acres} ac | {address} | LandInsight/LandPortal: {parcel_link}")
      → contact_quality = "New"
+     (create-contact has no field for this — the follow-up update-contact call is required, not optional)
 c. Template: rotate the campaign's first-touch versions by send order (continue rotation across
    runs using count of already-sent rows mod number of versions)
 d. ⚠️ Final inbox check: NOT (984) 368-4758

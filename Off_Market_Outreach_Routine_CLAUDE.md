@@ -109,6 +109,8 @@ Ruben is a **land investor / developer**. We are **NOT lowball cash-offer buyers
 
 This pitch is safe here because Subdivide rows are not, by definition, distressed/tax-delinquent sellers — the numbers can plausibly clear market value once subdivided. **Do not port this pitch to the Tax Delinquent campaign** — see that campaign's positioning for why.
 
+**Landlocked exception:** any Subdivide `campaign` value whose name contains "Landlocked" (currently `Ellis County Landlocked`, and automatically any future landlocked-designated county slice added the same way — no doc change needed to pick up a new one) does **not** open with the market-value developer pitch above. Access is the seller's actual problem on a landlocked parcel, not price, so lead with that instead — see the **Landlocked opener** under First-touch templates below. Once they engage, the rest of the stage machine (would-sell → price → call) is unchanged; only the opening message differs.
+
 ## Table columns (verbatim, `public.subdivide_outreach_leads`)
 
 ```
@@ -243,6 +245,18 @@ V5 = "Hi {first}, Ruben here. I'm buying land near {city} to develop. Would you 
 ```
 
 V1–V5 all ask the sell/offer question directly, so a plain "yes" = would-sell Yes (and a number back to V4 = asking price captured immediately). A "who is this?" / identity-check reply to ANY opener → category Follow-up (`response_type = "Identity Confirm"`) and triggers the INTRO script before re-asking.
+
+### Landlocked opener — replaces V1–V5 for any "…Landlocked" campaign value
+
+For rows whose `campaign` value contains "Landlocked" (currently `Ellis County Landlocked`), send this in place of V1–V5 as the first-touch message — the pitch is access-focused, not market-value:
+
+```
+LL_V1 = "I'm a land investor specializing in landlocked properties. Looking at aerial/CAD maps, {road} appears landlocked. Have you considered selling? — Ruben"
+```
+
+Same `{road}` placeholder and fallback as above (street portion of `parcel_address`, else "your land near {city}" if blank). Verify `len(msg) <= 160` after filling; if over, use the city-only fallback: `"I'm a land investor specializing in landlocked properties. Aerial/CAD maps show your land near {city} appears landlocked. Considered selling? — Ruben"`.
+
+This is the ONLY thing that changes for landlocked campaigns — follow-ups (E/F/G below), the stage machine, PRICE_ASK, CALL_ASK, and CLOSE are all unchanged and reused as-is once the lead replies. A "who is this?" reply to LL_V1 still triggers the standard INTRO script (not the market-value line — swap "we develop and subdivide, so if our numbers work we can pay close to market value" for a landlocked-appropriate reason to be interested, e.g. "we specialize in resolving access issues on landlocked parcels") before re-asking would-sell.
 
 ### Follow-ups (also ≤160 chars) — 3-touch, matches the 3 date columns
 

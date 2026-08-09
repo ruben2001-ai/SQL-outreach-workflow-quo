@@ -85,7 +85,7 @@ Every lead's `parcel_link` (a LandInsight or LandPortal parcel detail URL, depen
 | Campaign | Table | Scope | Positioning | Reach gate |
 | :---- | :---- | :---- | :---- | :---- |
 | **Subdivide — cold landowners** | `public.subdivide_outreach_leads` | Multi-county: filter by `campaign` column (currently `Kaufman`, `Van Zandt`, `Ellis County Landlocked`) | Land investor/developer, can pay near/full market value | `reach_method` in (`TEXT`,`TEXT+SOCIAL`) AND `dnc`='No' AND `state_dnc`='No' |
-| **Tax Delinquent (NC)** | `public.tax_delinquent_leads` | Single campaign (`campaign` = `NC Tax Delinquent`), spans multiple NC counties via `parcel_county` | Curative title researcher — no market-value talk | `reach_method`='TEXT' AND `dnc_status`='Clear' AND `source_sheet`='Main Outreach' |
+| **Tax Delinquent (NC)** | `public.tax_delinquent_leads` | Single campaign (`campaign` = `NC Tax Delinquent`), spans multiple NC counties via `parcel_county` | Split by `deceased`: `Y` → curative title researcher; `N`/blank → direct land investor/developer offer, no market-value promise. Neither branch discusses price by text. | `reach_method`='TEXT' AND `dnc_status`='Clear' AND `source_sheet`='Main Outreach' |
 
 > To add a new campaign: add a row here pointing at its Supabase table, define its positioning/stage machine in a new section below (copy the Tax Delinquent section as a template if it's a distressed/legal-angle campaign, or the Subdivide section if it's a straightforward buy pitch). No other change to this document is needed — every rule, cap, and phase applies identically per campaign. **The 15/day new-first-touch cap and the Sales-inbox check apply per campaign, per run** — and for Subdivide specifically, per `campaign` value (county), per run, since that table holds three counties side by side.
 
@@ -274,22 +274,26 @@ Table: `public.tax_delinquent_leads`. One campaign value (`NC Tax Delinquent`), 
 
 ## Why this campaign is different
 
-Every row here is, by definition, tax-delinquent. That changes the deal math: to make one of these work, the price usually has to land **below** market value — there isn't room to pay near/full market value the way the Subdivide pitch promises. Opening with "we pay close to market value" here would be an over-promise the numbers can't back up.
+Every row here is, by definition, tax-delinquent. That changes the deal math: to make one of these work, the price usually has to land **below** market value — there isn't room to pay near/full market value the way the Subdivide pitch promises. Opening with "we pay close to market value" here would be an over-promise the numbers can't back up, on either branch below.
 
-So the Subdivide script does not get reused on this table. Instead:
+**The `deceased` column is now the fork that decides the whole opening positioning, not just phrasing** — the two branches use genuinely different scripts, not variants of the same one:
 
-- Lead softly. The first goal is just to confirm **who you're actually talking to** — the owner, or someone related to the owner (heir, family member handling an estate) — not to pitch a sale.
-- Position Ruben as a **curative title researcher**: someone looking into ownership/title records on the parcel, not a buyer making an offer. This is true and it's low-pressure — most people are more willing to talk to someone sorting out a title/records question than to another "we buy land" texter.
-- The goal of the *texting* routine is to **get a call booked** for that conversation. Price and any actual offer only enter the picture later, once Ruben (or whoever handles the curative title work) has talked to them and the situation is understood — that stage is manual and off-script, not part of this daily routine.
-- **Never ask for a price and never mention an amount in this campaign's texts.** There is no `PRICE_ASK` step here — that's the single biggest difference from the Subdivide stage machine.
-- The `deceased` column matters: if `deceased = 'Y'`, assume you may be texting a relative rather than the owner, and phrase the opener accordingly (asking about the estate/family, not "are you the owner").
+- **`deceased = 'Y'`** — assume you may be texting a relative, not the owner of record. Lead softly: **curative title researcher** — someone looking into ownership/title records on the parcel, not a buyer. The first goal is just to confirm who you're actually talking to (owner vs. heir/family vs. unrelated) before pitching anything. This framing exists because it's genuinely unclear who's on the other end of the phone in an estate situation, and "are you the owner" would be the wrong question to lead with.
+- **`deceased = 'N'` (or blank/unconfirmed)** — the owner of record is presumed alive and reachable directly, so skip the identity-research framing entirely. Position Ruben plainly as a **land investor and developer** interested in making an offer, and ask directly if they've considered selling — same shape as the Subdivide opener, but **do not promise market value or near-market value here**: these are tax-delinquent sellers, the numbers usually only work at a discount, and over-promising on the opener creates a problem for the call later.
+
+Both branches share the same hard rule: **never ask for a price and never mention a dollar amount in this campaign's texts.** There is no `PRICE_ASK` step on either branch — that's still the single biggest difference from the Subdivide stage machine, deceased or not. The goal of the *texting* routine, either branch, is only to **get a call booked**; price and any actual offer are Ruben's job later, off-script.
 
 ## 🎯 Qualification Goals
 
+**`deceased = 'Y'` branch:**
 1. **RELATIONSHIP TO PROPERTY** — are they the owner, an heir/relative, or unrelated (wrong number)? (→ `response_type`: "Identity Confirm", "Owner Confirmed", "Heir/Family", or "Wrong Number")
 2. **CALL** — once relationship is confirmed and the curative-title framing has been delivered, get a time for a quick call (→ Google Calendar event, `call_date`)
 
-That's it — no asking price, no counter, no offer. `offer_made` / `offer_amount` / `offer_status` / `counter_amount` exist on this table for Ruben to fill in **after** the call, during the manual curative/offer phase — this routine never writes to them.
+**`deceased = 'N'`/blank branch:**
+1. **WOULD SELL** — have they considered selling? (Yes / Maybe / No → `quo_response_category`) — no identity-confirmation step, the opener already addresses them directly as the owner
+2. **CALL** — once willing (Yes/Maybe), get a time for a quick call (→ Google Calendar event, `call_date`)
+
+Neither branch asks price, takes a counter, or makes an offer over text. `offer_made` / `offer_amount` / `offer_status` / `counter_amount` exist on this table for Ruben to fill in **after** the call, during the manual curative/offer phase — this routine never writes to them.
 
 ## Table columns (verbatim, `public.tax_delinquent_leads`)
 
@@ -345,8 +349,8 @@ quo_response_category
 Not Contacted            not yet contacted (table default)
 Messaged                 first-touch sent, no reply (stage 0)
 Responded                reply received, relationship not yet confirmed (stage 1)
-Identity Confirmed       owner or heir/relative confirmed, curative intro not yet sent (stage 2)
-Intro Sent               curative-title positioning delivered, call not yet asked (stage 3)
+Identity Confirmed       [deceased='Y' only] owner or heir/relative confirmed, curative intro not yet sent (stage 2)
+Intro Sent               [deceased='Y' only] curative-title positioning delivered, call not yet asked (stage 3)
 Call Time Asked          asked when they can talk (stage 4)
 Qualified - Call Booked  call scheduled, calendar event created — Ruben/curative team takes over (stage 5)
 Not Owner / No Relation  confirmed no connection to the property — close politely, no further texts
@@ -369,45 +373,52 @@ Quo Error                send failed
 > opt-out. Every first-touch, follow-up, and TD_INTRO below uses `{loc}`.
 
 ```
-# FIRST-TOUCH VARIANTS — curative title framing, rotate by send order. ≤160 chars.
-# Use the "-D" variants when deceased = 'Y'.
-TD_V1   = "Hi {first}, I'm a title researcher looking into a property record {loc} tied to your name. Are you the owner, or related to them?"
-TD_V2   = "Hi {first}, doing ownership/title research on a parcel {loc}. Can you confirm you're connected to this property?"
-TD_V3   = "Hi {first}, I research property title & ownership records. A parcel {loc} lists your name — owner or relative?"
-TD_V4   = "Hi {first}, quick question — do you still own the property {loc}, or is it under a family member's name now?"
+# --- DECEASED = 'Y' BRANCH — curative title framing. ≤160 chars. ---
 TD_V1_D = "Hi, I'm researching title records for a property {loc} listed under {owner_last}. Are you a family member or connected to the estate?"
+
+# --- DECEASED = 'N' / blank BRANCH — direct land-investor pitch, no market-value promise. ≤160 chars. ---
+TD_LIVE_V1 = "Hi {first}, this is Ruben — I'm a land investor and developer. I'm interested in making an offer on your land {loc}. Have you considered selling?"
 ```
 
+> Only one variant per branch exists today — there's no rotation to manage, `Template: {tag}`
+> is just whichever branch's single template applies to that row's `deceased` value. If more
+> variants are added later to either branch, rotate within that branch only (never mix D and
+> LIVE variants on the same row).
+>
 > After filling placeholders, verify `len(msg) <= 160`. If over (long street name): drop the
 > ", {county} Co" suffix from `{loc}` and keep just "on {street}"; still over: fall back to the
-> county-only form `"in {county} County"`; still over: fall back to TD_V1's shortest phrasing.
+> county-only form `"in {county} County"`; still over (TD_LIVE_V1 only, TD_V1_D is already
+> shortest): drop "and developer" and "have you considered selling" → "Interested in selling?"
 > This mirrors the Subdivide campaign's own truncation ladder (see V1–V5 above) — property
 > mention is required, but it degrades gracefully rather than blowing the character cap.
 
 ```
-# INTRO — after relationship is confirmed (owner or heir/family), once per lead
+# INTRO — deceased='Y' branch ONLY, after relationship is confirmed (owner or heir/family), once per lead
 TD_INTRO = (
  "Thanks for confirming. I'm a curative title researcher — I help sort out ownership/title "
  "issues on the parcel {loc}. No offer, no pressure — just background. Got a few mins this "
  "week for a quick call?"
 )
 
-# CALL ASK — if they haven't given a time yet
+# CALL ASK — both branches, if they haven't given a time yet
 TD_CALL_ASK = "When's a good time this week for a quick call?"
 
-# CLOSE — they engaged but don't want to continue (not an opt-out keyword)
+# CLOSE — both branches, they engaged but don't want to continue (not an opt-out keyword)
 TD_CLOSE = (
  "No worries, thanks for confirming. If anything changes or you have questions about the "
  "property down the road, feel free to reach out. Take care!"
 )
 
-# NOT OWNER / NO RELATION — they say wrong number / no connection to the parcel
+# NOT OWNER / NO RELATION — deceased='Y' branch ONLY, they say wrong number / no connection to the parcel
 TD_NOT_OWNER = "Got it, sorry to bother you — thanks for letting me know, and take care."
 ```
 
 ## Stage machine
 
+Two separate stage machines, selected once per row by `deceased` at first-touch time and followed through to close — a row doesn't switch branches mid-conversation unless a reply reveals the owner is deceased (see note below).
+
 ```
+### deceased = 'Y' branch — identity confirmation first
 Messaged → reply received (not opt-out, not wrong-number-final):
     - Confirms owner or heir/family        → response_type = "Owner Confirmed" / "Heir/Family"
                                               → send TD_INTRO → outreach_status = "Identity Confirmed"
@@ -426,9 +437,28 @@ Call Time Asked → they give a time (or say "call me"):
     → call_date = scheduled datetime
     → outreach_status = "Qualified - Call Booked"
     → No confirmation message, no price talk. Ruben/curative team takes over from here.
+
+### deceased = 'N' / blank branch — opener already asks would-sell directly, no identity step
+Messaged → reply received (not opt-out, not wrong-number-final):
+    - Willing/interested ("yes", "maybe", "depends", "how do I sell")
+                                            → quo_response_category = Yes/Maybe, response_type = "Interested"
+                                              → send TD_CALL_ASK → outreach_status = "Call Time Asked"
+                                              (skip Identity Confirmed / Intro Sent — TD_LIVE_V1 already delivered the pitch)
+    - Not interested / No                   → send TD_CLOSE → outreach_status = "Closed - No"
+    - Unclear (e.g. "who is this?", "why?") → response_type = "Question", answer plainly
+      (e.g. "I buy land in the area and came across your property") without asking price, then
+      re-ask "Have you considered selling?"
+Call Time Asked → they give a time (or say "call me"):
+    → Check Google Calendar availability → create 30-min event:
+        title: "Land call — {Owner name} — {County}, NC"
+        description: phone, APN, table row id, parcel link
+      (If their time conflicts, propose the nearest free alternative in one short text.)
+    → call_date = scheduled datetime
+    → outreach_status = "Qualified - Call Booked"
+    → No confirmation message, no price talk. Ruben takes over from here.
 ```
 
-If a reply confirms the owner is deceased mid-conversation, set `deceased = 'Y'` if not already, and continue toward the heir/family relationship goal rather than restarting. Category No at ANY stage → TD_CLOSE → "Closed - No" (unless Opt Out → "Do Not Contact"). "No relation" is *not* an opt-out — it just ends outreach on this specific row; it doesn't touch other rows for a different owner.
+If a reply on the `deceased = 'N'`/blank branch reveals the owner is actually deceased, set `deceased = 'Y'` and switch to the `deceased = 'Y'` branch from that point on (send TD_INTRO next, not TD_CALL_ASK) rather than restarting from a fresh first-touch. Category No at ANY stage, either branch → TD_CLOSE → "Closed - No" (unless Opt Out → "Do Not Contact"). "No relation" is *not* an opt-out — it just ends outreach on this specific row; it doesn't touch other rows for a different owner.
 
 ## Follow-ups (also ≤160 chars) — 2-touch, matches the 2 date columns
 
@@ -464,8 +494,8 @@ Pull `Quo:fetch-messages(inboxId=OUTREACH_INBOX_ID, limit=100)` → last 24h →
 
 | Category | Meaning | Signals |
 | :---- | :---- | :---- |
-| **No** | Won't sell / not interested / won't engage | "not selling", "not interested", "not for sale", "keeping it", "family land", "never", "already sold" (Subdivide) / "not interested", "leave me alone" (Tax Delinquent) |
-| **Yes** | Open to selling (Subdivide) / confirmed owner or heir and willing to talk (Tax Delinquent) | "yes I'd sell", "interested", "make me an offer", names a price (Subdivide) / "yes that's me", "I'm his daughter", "yes I own it" (Tax Delinquent) |
+| **No** | Won't sell / not interested / won't engage | "not selling", "not interested", "not for sale", "keeping it", "family land", "never", "already sold" (Subdivide) / "not interested", "leave me alone" (Tax Delinquent, both branches) |
+| **Yes** | Open to selling (Subdivide) / Tax Delinquent — meaning depends on branch: `deceased='Y'` → confirmed owner or heir and willing to talk; `deceased='N'`/blank → directly open to selling | "yes I'd sell", "interested", "make me an offer", names a price (Subdivide) / "yes that's me", "I'm his daughter", "yes I own it" (Tax Delinquent, `deceased='Y'`) / "yes", "sure", "I'd consider it", "how much" (Tax Delinquent, `deceased='N'`/blank) |
 | **Maybe** | On the fence / conditional | "maybe", "depends", "possibly", "might consider", "what kind of offer" |
 | **Follow-up** | Answered but not the current goal yet | "who is this?", questions, "call me later", unclear |
 
@@ -570,8 +600,10 @@ b. Quo:list-contacts by phone:
      "APN {apn} | {acreage/lot_acres} ac | {address} | LandInsight/LandPortal: {parcel_link}")
      → contact_quality = "New"
      (create-contact has no field for this — the follow-up update-contact call is required, not optional)
-c. Template: rotate the campaign's first-touch versions by send order (continue rotation across
-   runs using count of already-sent rows mod number of versions)
+c. Template: Subdivide (and its Landlocked slice) — rotate the campaign's first-touch versions
+   by send order (continue rotation across runs using count of already-sent rows mod number of
+   versions). Tax Delinquent — no rotation, select by `deceased`: `deceased='Y'` → TD_V1_D,
+   else → TD_LIVE_V1.
 d. ⚠️ Final inbox check: NOT (984) 368-4758
 e. Quo:send-message → write back IMMEDIATELY, row by row:
      quo_message_date = today (Subdivide only — Tax Delinquent: log the date in notes instead

@@ -347,19 +347,34 @@ Quo Error                send failed
 
 ## Conversation scripts
 
+> **Always mention the specific property, every message, this campaign.** Define
+> `{loc}` = `"on {street}, {county} Co"` using the street portion of `parcel_full_address`
+> (e.g. "Mt Pleasant Rd S") when it's non-blank, else fall back to `"in {county} County"`
+> alone (`{county}` = `parcel_county`). Never send a message that only says "a property" /
+> "this property" with no location at all — the county-only fallback is the floor, not an
+> opt-out. Every first-touch, follow-up, and TD_INTRO below uses `{loc}`.
+
 ```
 # FIRST-TOUCH VARIANTS — curative title framing, rotate by send order. ≤160 chars.
 # Use the "-D" variants when deceased = 'Y'.
-TD_V1   = "Hi {first}, I'm a title researcher looking into a property record tied to your name in {county} Co. Are you the owner, or related to them?"
-TD_V2   = "Hi {first}, doing ownership/title research on a parcel in {county} County. Can you confirm you're connected to this property?"
-TD_V3   = "Hi {first}, I research property title & ownership records. A parcel in {county} Co lists your name — owner or relative?"
-TD_V4   = "Hi {first}, quick question — do you still own property in {county} County, or is it under a family member's name now?"
-TD_V1_D = "Hi, I'm researching title records for a property listed under {owner_last}. Are you a family member or connected to the estate?"
+TD_V1   = "Hi {first}, I'm a title researcher looking into a property record {loc} tied to your name. Are you the owner, or related to them?"
+TD_V2   = "Hi {first}, doing ownership/title research on a parcel {loc}. Can you confirm you're connected to this property?"
+TD_V3   = "Hi {first}, I research property title & ownership records. A parcel {loc} lists your name — owner or relative?"
+TD_V4   = "Hi {first}, quick question — do you still own the property {loc}, or is it under a family member's name now?"
+TD_V1_D = "Hi, I'm researching title records for a property {loc} listed under {owner_last}. Are you a family member or connected to the estate?"
+```
 
+> After filling placeholders, verify `len(msg) <= 160`. If over (long street name): drop the
+> ", {county} Co" suffix from `{loc}` and keep just "on {street}"; still over: fall back to the
+> county-only form `"in {county} County"`; still over: fall back to TD_V1's shortest phrasing.
+> This mirrors the Subdivide campaign's own truncation ladder (see V1–V5 above) — property
+> mention is required, but it degrades gracefully rather than blowing the character cap.
+
+```
 # INTRO — after relationship is confirmed (owner or heir/family), once per lead
 TD_INTRO = (
  "Thanks for confirming. I'm a curative title researcher — I help sort out ownership/title "
- "issues on parcels like this. No offer, no pressure — just background. Got a few mins this "
+ "issues on the parcel {loc}. No offer, no pressure — just background. Got a few mins this "
  "week for a quick call?"
 )
 
@@ -404,8 +419,8 @@ If a reply confirms the owner is deceased mid-conversation, set `deceased = 'Y'`
 ## Follow-ups (also ≤160 chars) — 2-touch, matches the 2 date columns
 
 ```
-E = "Hi {first}, following up — I'm still trying to confirm the right contact for a property record in {county} County. Are you connected to it?"   # 5+ days after initial
-F = "{first}, last note on this — if you're the owner or related to the property in {county} County, I'd appreciate a quick reply either way."        # 10+ days after E
+E = "Hi {first}, following up — still trying to confirm the right contact for the property record {loc}. Are you connected to it?"   # 5+ days after initial
+F = "{first}, last note on this — if you're the owner or related to the property {loc}, I'd appreciate a quick reply either way."        # 10+ days after E
 ```
 
 After F with no response: `outreach_status = "Sequence Complete"`.

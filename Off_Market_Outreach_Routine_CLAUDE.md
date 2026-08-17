@@ -63,8 +63,9 @@ The agent never states a dollar offer, never negotiates. In the Subdivide campai
 Every lead's `parcel_link` (a LandInsight or LandPortal parcel detail URL, depending which platform the batch was sourced from) must be attached to its Quo contact — both for brand-new contacts and for existing ones being reached out to for the first time by this routine:
 
 - **Read `parcel_link` verbatim from the row. Never reconstruct or derive it** — LandPortal links are an opaque encoded query string, not a predictable pattern from the APN like older LandInsight links were. Some campaigns mix both platforms row by row (e.g. the Ellis County Landlocked slice of the Subdivide table uses LandPortal while Kaufman/Van Zandt use LandInsight) — always take whatever string is stored, don't assume a format.
-- **New contact** (`Quo:create-contact`) → include `LandInsight/LandPortal: {parcel_link}` directly in the `notes` field at creation time.
-- **Existing contact** (`contact_quality = "Existing in Quo"`) → before sending, check its notes; if no parcel-link line is present, call `Quo:update-contact` to append it.
+- ⚠️ **The Quo contact object has no `notes` field** — `create-contact`/`update-contact` only accept `firstName`, `lastName`, `company`, `role`, `email`, `phoneNumber`. Store the link in **`company`** instead (free-text, unused for individual landowners) — this matches the format already on older contacts in the workspace: `"APN {apn} | {acreage/lot_acres} ac | {address} | LandInsight/LandPortal: {parcel_link}"`.
+- **New contact** (`Quo:create-contact`) → set `company` to that string at creation time.
+- **Existing contact** (`contact_quality = "Existing in Quo"`) → before sending, `Quo:get-contact` and check its `company` field; if no parcel-link line is present, call `Quo:update-contact` to set it.
 - Never send a first-touch or follow-up message to a contact whose Quo record is missing this link.
 
 ---
@@ -83,7 +84,7 @@ Every lead's `parcel_link` (a LandInsight or LandPortal parcel detail URL, depen
 
 | Campaign | Table | Scope | Positioning | Reach gate |
 | :---- | :---- | :---- | :---- | :---- |
-| **Subdivide — cold landowners** | `public.subdivide_outreach_leads` | Multi-county: filter by `campaign` column (currently `Kaufman`, `Van Zandt`, `Ellis County Landlocked`) | Land investor/developer, can pay near/full market value | `reach_method` in (`TEXT`,`TEXT+SOCIAL`) AND `dnc`='No' AND `state_dnc`='No' |
+| **Subdivide — cold landowners** | `public.subdivide_outreach_leads` | Multi-county: filter by `campaign` column (currently `Kaufman`, `Van Zandt`, `Ellis County Landlocked`) | Land investor/developer, can pay near/full market value — **except `Ellis County Landlocked`, which uses a landlocked-specialist pitch, no market-value talk (see the exception subsection right after Positioning below)** | `reach_method` in (`TEXT`,`TEXT+SOCIAL`) AND `dnc`='No' AND `state_dnc`='No' |
 | **Tax Delinquent (NC)** | `public.tax_delinquent_leads` | Single campaign (`campaign` = `NC Tax Delinquent`), spans multiple NC counties via `parcel_county` | Curative title researcher — no market-value talk | `reach_method`='TEXT' AND `dnc_status`='Clear' AND `source_sheet`='Main Outreach' |
 
 > To add a new campaign: add a row here pointing at its Supabase table, define its positioning/stage machine in a new section below (copy the Tax Delinquent section as a template if it's a distressed/legal-angle campaign, or the Subdivide section if it's a straightforward buy pitch). No other change to this document is needed — every rule, cap, and phase applies identically per campaign. **The 15/day new-first-touch cap and the Sales-inbox check apply per campaign, per run** — and for Subdivide specifically, per `campaign` value (county), per run, since that table holds three counties side by side.
@@ -107,6 +108,12 @@ Only then does Ruben get on the sales call to negotiate. The agent NEVER negotia
 Ruben is a **land investor / developer**. We are **NOT lowball cash-offer buyers**. Because we develop and subdivide the land (and potentially build later), we can often pay **close to market value — or at market value — if our development numbers allow it**. Lead with this in the INTRO script. It's the core differentiator vs. every other "cash for land" texter they get.
 
 This pitch is safe here because Subdivide rows are not, by definition, distressed/tax-delinquent sellers — the numbers can plausibly clear market value once subdivided. **Do not port this pitch to the Tax Delinquent campaign** — see that campaign's positioning for why.
+
+### ⚠️ Exception — `campaign = 'Ellis County Landlocked'` uses a different pitch
+
+This slice of the table was sourced specifically because the parcels are **landlocked** (no legal/practical road access) — not for subdivision upside. The market-value/developer pitch above doesn't fit: it overpromises on a parcel type that's inherently harder to sell and usually trades below market because of the access problem. **Never send the market-value/developer positioning to an Ellis County Landlocked row.**
+
+Position Ruben instead as a **landlocked-parcel specialist** — someone who specifically buys parcels other buyers pass on because they lack access, as-is. The qualification goals, stage machine, and shared scripts (`PRICE_ASK`, `PRICE_NUDGE`, `CALL_ASK`) are identical to the rest of Subdivide — only the opening pitch and the pieces that reference "market value" change. See the **Ellis County Landlocked** variants called out inline in the Conversation scripts, First-touch templates, and Follow-ups sections below. Kaufman and Van Zandt keep the standard pitch above, unchanged.
 
 ## Table columns (verbatim, `public.subdivide_outreach_leads`)
 
@@ -200,6 +207,21 @@ CLOSE = (
  "All good, thanks for letting me know. If that ever changes, keep my number — "
  "we pay close to market value when the numbers work. Take care! — Ruben"
 )
+
+# --- Ellis County Landlocked variants (replace INTRO/CLOSE above; PRICE_ASK/PRICE_NUDGE/CALL_ASK are shared) ---
+
+# LL_INTRO — for identity-check/clarification replies to LL_V1 (e.g. "who is this?")
+LL_INTRO = (
+ "Hi {first}, Ruben here — I focus specifically on landlocked parcels like yours on {road}. "
+ "Since there's no direct access, most buyers won't touch it, but I buy these directly. "
+ "Would you consider selling?"
+)
+
+# LL_CLOSE — would sell = No (not opt-out)
+LL_CLOSE = (
+ "All good, thanks for letting me know. If that ever changes, keep my number — "
+ "I specialize in landlocked parcels like this one. Take care! — Ruben"
+)
 ```
 
 ## Stage machine
@@ -229,6 +251,8 @@ Call Time Asked → they give a time (or say "call me"):
 
 Skip stages when the owner jumps ahead (e.g. first reply = "I'd take $500k" → write category, `counter_amount`; fold the INTRO positioning into the next message). Category No at ANY stage → CLOSE → "Closed - No" (unless Opt Out → "Do Not Contact").
 
+> **Ellis County Landlocked**: same stage machine, but substitute `LL_INTRO` for `INTRO` and `LL_CLOSE` for `CLOSE` throughout — `PRICE_ASK`, `PRICE_NUDGE`, and `CALL_ASK` are unchanged.
+
 ## First-touch templates — 5 rotating versions, HARD MAX 160 CHARACTERS
 
 > After filling placeholders, verify `len(msg) <= 160`. If over: use street name only for `{road}`; still over: drop the acreage; still over: fall back to V1. `{road}` = street portion of `parcel_address` (or "{city} area" if blank). `{ac}` = `acreage`.
@@ -243,12 +267,28 @@ V5 = "Hi {first}, Ruben here. I'm buying land near {city} to develop. Would you 
 
 V1–V5 all ask the sell/offer question directly, so a plain "yes" = would-sell Yes (and a number back to V4 = asking price captured immediately). A "who is this?" / identity-check reply to ANY opener → category Follow-up (`response_type = "Identity Confirm"`) and triggers the INTRO script before re-asking.
 
+### `campaign = 'Ellis County Landlocked'` — first-touch override (replaces V1–V5 above)
+
+> Use this single template for every Ellis County Landlocked first-touch send instead of V1–V5 — do not use the market-value V1–V5 templates on this campaign slice. Rotation math (`count mod N`) still applies but trivially always resolves to this one template. Same 160-char rule and the same overflow fallback order (street-only `{road}` → drop mention of the aerial view → fall back to a bare "would you consider selling your land on {road}?" ask). A plain "yes" reply = would-sell Yes; a "who is this?" reply → category Follow-up, `response_type = "Identity Confirm"`, send `LL_INTRO` before re-asking — same handling as V1–V5.
+
+```
+LL_V1 = "Hi {first}, I see your property on {road} looks landlocked from an aerial view. I specialize in buying these, would you consider selling? Best, Ruben"
+```
+
 ### Follow-ups (also ≤160 chars) — 3-touch, matches the 3 date columns
 
 ```
 E = "Hi {first}, following up about your land on {road}. We're developers, not lowballers — we pay near market value. Open to a chat?"   # 5+ days after initial
 F = "{first}, checking in once more on your {ac} acres on {road}. Even a rough idea of your price helps. Worth a quick chat? — Ruben"     # 10+ days after E
 G = "{first}, last note about your land on {road}. If selling ever makes sense, we pay close to market value. Keep my number. — Ruben"    # 10+ days after F
+```
+
+### `campaign = 'Ellis County Landlocked'` — follow-up overrides (replace E/F/G above)
+
+```
+LL_E = "Hi {first}, following up on your landlocked property on {road}. I buy these as-is, no access needed on your end. Worth a quick chat?"          # 5+ days after initial
+LL_F = "{first}, checking in once more on the landlocked parcel on {road}. I specialize in these — happy to make a fair offer. Worth a chat? — Ruben"  # 10+ days after LL_E
+LL_G = "{first}, last note on your landlocked land on {road}. If selling ever makes sense, I buy these directly. Keep my number. — Ruben"              # 10+ days after LL_F
 ```
 
 ---
@@ -534,10 +574,10 @@ a. Send phone: active_phone if set, else first phone_N_type = Mobile, else phone
    fail → outreach_status = "Contact Missing", skip (no count)
 b. Quo:list-contacts by phone:
    - found + prior history in Outreach inbox → outreach_status = "Already Contacted", skip (no count)
-   - found, no history → contact_quality = "Existing in Quo"; if the contact's notes don't already
-     contain a parcel-link line → Quo:update-contact to append it
-   - not found → Quo:create-contact(name, phone, email?,
-     notes = "APN {apn} | {acreage/lot_acres} ac | {address} | LandInsight/LandPortal: {parcel_link}")
+   - found, no history → contact_quality = "Existing in Quo"; Quo:get-contact and check its `company`
+     field — if it doesn't already contain a parcel-link line → Quo:update-contact to set it
+   - not found → Quo:create-contact(firstName, lastName, phoneNumber, email?,
+     company = "APN {apn} | {acreage/lot_acres} ac | {address} | LandInsight/LandPortal: {parcel_link}")
      → contact_quality = "New"
 c. Template: rotate the campaign's first-touch versions by send order (continue rotation across
    runs using count of already-sent rows mod number of versions)
